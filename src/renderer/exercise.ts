@@ -51,7 +51,7 @@ export function renderExercise(
 
 	const inputs = new Map<string, HTMLInputElement>();
 
-	// Main row with icon, name, and timer
+	// Single row: icon | name | params | timer
 	const mainRow = exerciseEl.createDiv({ cls: 'workout-exercise-main' });
 
 	// State icon
@@ -62,30 +62,15 @@ export function renderExercise(
 	const nameEl = mainRow.createSpan({ cls: 'workout-exercise-name' });
 	nameEl.textContent = exercise.name;
 
-	// Timer display (right side)
-	const timerEl = mainRow.createSpan({ cls: 'workout-exercise-timer' });
-
-	if (exercise.state === 'completed' && exercise.recordedDuration) {
-		timerEl.textContent = exercise.recordedDuration;
-		timerEl.createSpan({ cls: 'timer-indicator recorded', text: ' ✓' });
-	} else if (isActive && timerState) {
-		updateExerciseTimer(timerEl, timerState, exercise.targetDuration);
-	} else if (exercise.targetDuration) {
-		timerEl.textContent = formatDuration(exercise.targetDuration);
-		timerEl.createSpan({ cls: 'timer-indicator count-down', text: ' ▼' });
-	} else if (exercise.state === 'pending') {
-		timerEl.textContent = '--';
-	}
-
-	// Params row (only if there are displayable params)
+	// Params inline (between name and timer)
 	if (hasDisplayableParams(exercise)) {
-		const paramsRow = exerciseEl.createDiv({ cls: 'workout-exercise-params' });
+		const paramsEl = mainRow.createSpan({ cls: 'workout-exercise-params' });
 
 		for (const param of exercise.params) {
-			// Skip Duration param in params display (shown in timer)
+			// Skip Duration param (shown in timer)
 			if (param.key.toLowerCase() === 'duration') continue;
 
-			const paramEl = paramsRow.createSpan({ cls: 'workout-param' });
+			const paramEl = paramsEl.createSpan({ cls: 'workout-param' });
 
 			paramEl.createSpan({ cls: 'workout-param-key', text: `${param.key}: ` });
 
@@ -112,6 +97,21 @@ export function renderExercise(
 				paramEl.createSpan({ cls: 'workout-param-unit', text: ` ${param.unit}` });
 			}
 		}
+	}
+
+	// Timer display (right side)
+	const timerEl = mainRow.createSpan({ cls: 'workout-exercise-timer' });
+
+	if (exercise.state === 'completed' && exercise.recordedDuration) {
+		timerEl.textContent = exercise.recordedDuration;
+		timerEl.createSpan({ cls: 'timer-indicator recorded', text: ' ✓' });
+	} else if (isActive && timerState) {
+		updateExerciseTimer(timerEl, timerState, exercise.targetDuration);
+	} else if (exercise.targetDuration) {
+		timerEl.textContent = formatDuration(exercise.targetDuration);
+		timerEl.createSpan({ cls: 'timer-indicator count-down', text: ' ▼' });
+	} else if (exercise.state === 'pending') {
+		timerEl.textContent = '--';
 	}
 
 	// Controls row (only for active exercise during workout)

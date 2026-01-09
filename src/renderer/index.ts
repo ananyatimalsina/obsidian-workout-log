@@ -41,6 +41,11 @@ export function renderWorkout(ctx: RendererContext): void {
 
 	const exercisesContainer = container.createDiv({ cls: 'workout-exercises' });
 
+	// Calculate max name length for alignment
+	const maxNameLength = Math.max(...parsed.exercises.map(e => e.name.length));
+	// Approximate character width (will be refined by CSS)
+	exercisesContainer.style.setProperty('--max-name-chars', String(maxNameLength));
+
 	for (let i = 0; i < parsed.exercises.length; i++) {
 		const exercise = parsed.exercises[i];
 		if (!exercise) continue;
