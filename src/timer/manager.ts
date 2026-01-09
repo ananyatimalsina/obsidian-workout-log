@@ -121,6 +121,19 @@ export class TimerManager {
 		return timer?.activeExerciseIndex ?? 0;
 	}
 
+	setActiveExerciseIndex(workoutId: string, index: number): void {
+		const timer = this.timers.get(workoutId);
+		if (!timer) return;
+
+		// Only reset exercise timer if index actually changed
+		if (timer.activeExerciseIndex !== index) {
+			timer.activeExerciseIndex = index;
+			timer.exerciseStartTime = Date.now();
+			timer.exercisePausedTime = 0;
+			timer.isPaused = false;
+		}
+	}
+
 	isTimerRunning(workoutId: string): boolean {
 		return this.timers.has(workoutId);
 	}

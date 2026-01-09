@@ -21,6 +21,7 @@ export interface WorkoutMetadata {
 	state: WorkoutState;
 	startDate?: string;   // ISO format or human readable
 	duration?: string;    // e.g., "11m 33s"
+	restDuration?: number; // Default rest duration in seconds
 }
 
 // Single exercise entry
@@ -68,8 +69,10 @@ export interface WorkoutCallbacks {
 	onFinishWorkout: () => Promise<void>;
 	onExerciseFinish: (exerciseIndex: number) => Promise<void>;
 	onExerciseAddSet: (exerciseIndex: number) => Promise<void>;
+	onExerciseAddRest: (exerciseIndex: number) => Promise<void>;
 	onExerciseSkip: (exerciseIndex: number) => Promise<void>;
-	onParamChange: (exerciseIndex: number, paramKey: string, newValue: string) => Promise<void>;
+	onParamChange: (exerciseIndex: number, paramKey: string, newValue: string) => void;
+	onFlushChanges: () => Promise<void>;
 	onPauseExercise: () => void;
 	onResumeExercise: () => void;
 }

@@ -58,13 +58,23 @@ export function renderWorkout(ctx: RendererContext): void {
 			isActive,
 			isActive ? timerState : null,
 			callbacks,
-			parsed.metadata.state
+			parsed.metadata.state,
+			parsed.metadata.restDuration
 		);
 		exerciseElements.push(elements);
 	}
 
 	// Render workout-level controls
 	renderWorkoutControls(container, parsed.metadata.state, callbacks, parsed);
+
+	// Flush pending changes when focus leaves the workout container
+	container.addEventListener('focusout', (e) => {
+		const relatedTarget = e.relatedTarget as HTMLElement | null;
+		// Only flush if focus is leaving the container entirely
+		if (!relatedTarget || !container.contains(relatedTarget)) {
+			callbacks.onFlushChanges();
+		}
+	});
 
 	// Subscribe to timer updates if workout is in progress
 	if (isTimerRunning) {

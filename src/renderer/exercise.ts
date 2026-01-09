@@ -38,7 +38,8 @@ export function renderExercise(
 	isActive: boolean,
 	timerState: TimerState | null,
 	callbacks: WorkoutCallbacks,
-	workoutState: 'planned' | 'started' | 'completed'
+	workoutState: 'planned' | 'started' | 'completed',
+	restDuration?: number
 ): ExerciseElements {
 	const isSimple = !hasDisplayableParams(exercise);
 	const exerciseEl = container.createDiv({
@@ -62,7 +63,7 @@ export function renderExercise(
 	const nameEl = mainRow.createSpan({ cls: 'workout-exercise-name' });
 	nameEl.textContent = exercise.name;
 
-	// Params inline (between name and timer)
+	// Params inline (between name and timer) - chip/pill style
 	if (hasDisplayableParams(exercise)) {
 		const paramsEl = mainRow.createSpan({ cls: 'workout-exercise-params' });
 
@@ -72,7 +73,10 @@ export function renderExercise(
 
 			const paramEl = paramsEl.createSpan({ cls: 'workout-param' });
 
-			paramEl.createSpan({ cls: 'workout-param-key', text: `${param.key}: ` });
+			// × prefix for params without units (plain numbers)
+			if (!param.unit) {
+				paramEl.createSpan({ cls: 'workout-param-prefix', text: '×' });
+			}
 
 			if (param.editable && workoutState !== 'completed') {
 				const input = paramEl.createEl('input', {
@@ -80,7 +84,8 @@ export function renderExercise(
 					type: 'text',
 					value: param.value
 				});
-				input.addEventListener('blur', () => {
+				// Track changes immediately (updates in-memory state)
+				input.addEventListener('input', () => {
 					callbacks.onParamChange(index, param.key, input.value);
 				});
 				input.addEventListener('keydown', (e) => {
@@ -93,6 +98,7 @@ export function renderExercise(
 				paramEl.createSpan({ cls: 'workout-param-value', text: param.value });
 			}
 
+			// Unit after value
 			if (param.unit) {
 				paramEl.createSpan({ cls: 'workout-param-unit', text: ` ${param.unit}` });
 			}
@@ -116,7 +122,7 @@ export function renderExercise(
 
 	// Controls row (only for active exercise during workout)
 	if (isActive && workoutState === 'started') {
-		renderExerciseControls(exerciseEl, index, callbacks);
+		renderExerciseControls(exerciseEl, index, callbacks, restDuration);
 	}
 
 	return { container: exerciseEl, timerEl, inputs };
@@ -125,49 +131,49 @@ export function renderExercise(
 function renderExerciseControls(
 	exerciseEl: HTMLElement,
 	index: number,
-	callbacks: WorkoutCallbacks
+	callbacks: WorkoutCallbacks,
+	restDuration?: number
 ): void {
 	const controlsEl = exerciseEl.createDiv({ cls: 'workout-exercise-controls' });
 
 	// Pause/Resume button
-	const pauseBtn = controlsEl.createEl('button', { cls: 'workout-btn' });
-	pauseBtn.createSpan({ cls: 'workout-btn-icon', text: '⏸' });
-	pauseBtn.createSpan({ text: 'Pause' });
+	const pauseBtn = controlsEl.createEl('button', { cls: 'workout-btn', text: 'Pause' });
 	pauseBtn.addEventListener('click', () => {
-		const textSpan = pauseBtn.querySelector('span:last-child');
-		const iconSpan = pauseBtn.querySelector('.workout-btn-icon');
-		if (textSpan?.textContent === 'Pause') {
+		if (pauseBtn.textContent === 'Pause') {
 			callbacks.onPauseExercise();
-			if (textSpan) textSpan.textContent = 'Resume';
-			if (iconSpan) iconSpan.textContent = '▶';
+			pauseBtn.textContent = 'Resume';
 		} else {
 			callbacks.onResumeExercise();
-			if (textSpan) textSpan.textContent = 'Pause';
-			if (iconSpan) iconSpan.textContent = '⏸';
+			pauseBtn.textContent = 'Pause';
 		}
 	});
 
 	// Skip button
-	const skipBtn = controlsEl.createEl('button', { cls: 'workout-btn' });
-	skipBtn.createSpan({ cls: 'workout-btn-icon', text: '⏭' });
-	skipBtn.createSpan({ text: 'Skip' });
+	const skipBtn = controlsEl.createEl('button', { cls: 'workout-btn', text: 'Skip' });
 	skipBtn.addEventListener('click', () => {
 		callbacks.onExerciseSkip(index);
 	});
 
+	// Finish group container
+	const finishGroup = controlsEl.createDiv({ cls: 'workout-btn-group' });
+
 	// Add Set button
-	const addSetBtn = controlsEl.createEl('button', { cls: 'workout-btn workout-btn-secondary' });
-	addSetBtn.createSpan({ cls: 'workout-btn-icon', text: '+' });
-	addSetBtn.createSpan({ text: 'Add Set' });
+	const addSetBtn = finishGroup.createEl('button', { cls: 'workout-btn', text: '+ Set' });
 	addSetBtn.addEventListener('click', () => {
 		callbacks.onExerciseAddSet(index);
 	});
 
-	// Finish button
-	const finishBtn = controlsEl.createEl('button', { cls: 'workout-btn workout-btn-primary' });
-	finishBtn.createSpan({ cls: 'workout-btn-icon', text: '✓' });
-	finishBtn.createSpan({ text: 'Finish' });
-	finishBtn.addEventListener('click', () => {
+	// Add Rest button (only if restDuration is defined)
+	if (restDuration !== undefined) {
+		const addRestBtn = finishGroup.createEl('button', { cls: 'workout-btn', text: '+ Rest' });
+		addRestBtn.addEventListener('click', () => {
+			callbacks.onExerciseAddRest(index);
+		});
+	}
+
+	// Next button (finish current, move to next)
+	const nextBtn = finishGroup.createEl('button', { cls: 'workout-btn', text: 'Next' });
+	nextBtn.addEventListener('click', () => {
 		callbacks.onExerciseFinish(index);
 	});
 }

@@ -66,6 +66,37 @@ export function lockAllFields(parsed: ParsedWorkout): ParsedWorkout {
 	return newParsed;
 }
 
+// Add a rest exercise after the specified index
+export function addRest(parsed: ParsedWorkout, exerciseIndex: number, restDuration: number): ParsedWorkout {
+	const newParsed = structuredClone(parsed);
+	const currentExercise = newParsed.exercises[exerciseIndex];
+	if (!currentExercise) return parsed;
+
+	// Create a Rest exercise with countdown duration
+	const restExercise: Exercise = {
+		state: 'pending',
+		name: 'Rest',
+		params: [{
+			key: 'Duration',
+			value: `${restDuration}s`,
+			editable: true
+		}],
+		targetDuration: restDuration,
+		lineIndex: currentExercise.lineIndex + 1
+	};
+
+	// Insert after current exercise
+	newParsed.exercises.splice(exerciseIndex + 1, 0, restExercise);
+
+	// Update line indices for subsequent exercises
+	for (let i = exerciseIndex + 2; i < newParsed.exercises.length; i++) {
+		const ex = newParsed.exercises[i];
+		if (ex) ex.lineIndex++;
+	}
+
+	return newParsed;
+}
+
 // Add a new set (duplicate an exercise)
 export function addSet(parsed: ParsedWorkout, exerciseIndex: number): ParsedWorkout {
 	const newParsed = structuredClone(parsed);

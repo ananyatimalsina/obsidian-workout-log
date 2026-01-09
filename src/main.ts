@@ -1,6 +1,6 @@
 import { Plugin, MarkdownPostProcessorContext } from 'obsidian';
 import { parseWorkout } from './parser';
-import { serializeWorkout, updateParamValue, updateExerciseState, addSet, setRecordedDuration, lockAllFields } from './serializer';
+import { serializeWorkout, updateParamValue, updateExerciseState, addSet, addRest, setRecordedDuration, lockAllFields } from './serializer';
 import { renderWorkout } from './renderer';
 import { TimerManager } from './timer/manager';
 import { FileUpdater } from './file/updater';
@@ -33,6 +33,21 @@ export default class WorkoutLogPlugin extends Plugin {
 		const sectionInfo = ctx.getSectionInfo(el) as SectionInfo | null;
 		const workoutId = `${ctx.sourcePath}:${sectionInfo?.lineStart ?? 0}`;
 
+		// Sync timer state with parsed state (handles undo/external changes)
+		const isTimerRunning = this.timerManager.isTimerRunning(workoutId);
+		if (isTimerRunning && parsed.metadata.state !== 'started') {
+			// File was reverted to non-started state, stop the timer
+			this.timerManager.stopWorkoutTimer(workoutId);
+		} else if (isTimerRunning && parsed.metadata.state === 'started') {
+			// Sync active exercise index with parsed state (handles undo of exercise actions)
+			const parsedActiveIndex = parsed.exercises.findIndex(e => e.state === 'inProgress');
+			const timerActiveIndex = this.timerManager.getActiveExerciseIndex(workoutId);
+			if (parsedActiveIndex >= 0 && parsedActiveIndex !== timerActiveIndex) {
+				// Active exercise changed externally (undo), update timer
+				this.timerManager.setActiveExerciseIndex(workoutId, parsedActiveIndex);
+			}
+		}
+
 		const callbacks = this.createCallbacks(ctx, sectionInfo, parsed, workoutId);
 
 		renderWorkout({
@@ -52,15 +67,27 @@ export default class WorkoutLogPlugin extends Plugin {
 	): WorkoutCallbacks {
 		// Keep a reference to current parsed state
 		let currentParsed = parsed;
+		let hasPendingChanges = false;
 
 		const updateFile = async (newParsed: ParsedWorkout): Promise<void> => {
 			currentParsed = newParsed;
+			hasPendingChanges = false;
 			const newContent = serializeWorkout(newParsed);
-			await this.fileUpdater?.updateCodeBlock(ctx.sourcePath, sectionInfo, newContent);
+			// Pass title for validation to prevent cross-block contamination
+			const expectedTitle = currentParsed.metadata.title;
+			await this.fileUpdater?.updateCodeBlock(ctx.sourcePath, sectionInfo, newContent, expectedTitle);
+		};
+
+		// Flush any pending param changes to file
+		const flushChanges = async (): Promise<void> => {
+			if (hasPendingChanges) {
+				await updateFile(currentParsed);
+			}
 		};
 
 		return {
 			onStartWorkout: async (): Promise<void> => {
+				hasPendingChanges = false; // Will be saved by updateFile below
 				// Update state to started
 				currentParsed.metadata.state = 'started';
 				currentParsed.metadata.startDate = this.formatStartDate(new Date());
@@ -99,6 +126,7 @@ export default class WorkoutLogPlugin extends Plugin {
 			},
 
 			onExerciseFinish: async (exerciseIndex: number): Promise<void> => {
+				hasPendingChanges = false; // Will be saved by updateFile below
 				const exercise = currentParsed.exercises[exerciseIndex];
 				if (!exercise) return;
 
@@ -142,6 +170,7 @@ export default class WorkoutLogPlugin extends Plugin {
 			},
 
 			onExerciseAddSet: async (exerciseIndex: number): Promise<void> => {
+				hasPendingChanges = false; // Will be saved by updateFile below
 				const exercise = currentParsed.exercises[exerciseIndex];
 				if (!exercise) return;
 
@@ -170,7 +199,39 @@ export default class WorkoutLogPlugin extends Plugin {
 				await updateFile(currentParsed);
 			},
 
+			onExerciseAddRest: async (exerciseIndex: number): Promise<void> => {
+				hasPendingChanges = false; // Will be saved by updateFile below
+				const exercise = currentParsed.exercises[exerciseIndex];
+				const restDuration = currentParsed.metadata.restDuration;
+				if (!exercise || !restDuration) return;
+
+				// Record duration for current exercise
+				const timerState = this.timerManager.getTimerState(workoutId);
+				if (timerState) {
+					currentParsed = setRecordedDuration(
+						currentParsed,
+						exerciseIndex,
+						formatDurationHuman(timerState.exerciseElapsed)
+					);
+				}
+
+				// Mark current as completed
+				currentParsed = updateExerciseState(currentParsed, exerciseIndex, 'completed');
+
+				// Add rest exercise (inserts after current)
+				currentParsed = addRest(currentParsed, exerciseIndex, restDuration);
+
+				// The new rest is at exerciseIndex + 1, activate it
+				currentParsed = updateExerciseState(currentParsed, exerciseIndex + 1, 'inProgress');
+
+				// Advance timer BEFORE file update so re-render sees reset timer
+				this.timerManager.advanceExercise(workoutId, exerciseIndex + 1);
+
+				await updateFile(currentParsed);
+			},
+
 			onExerciseSkip: async (exerciseIndex: number): Promise<void> => {
+				hasPendingChanges = false; // Will be saved by updateFile below
 				// Record duration if any time elapsed
 				const timerState = this.timerManager.getTimerState(workoutId);
 				if (timerState && timerState.exerciseElapsed > 0) {
@@ -211,10 +272,19 @@ export default class WorkoutLogPlugin extends Plugin {
 				}
 			},
 
-			onParamChange: async (exerciseIndex: number, paramKey: string, newValue: string): Promise<void> => {
+			onParamChange: (exerciseIndex: number, paramKey: string, newValue: string): void => {
+				// Check if value actually changed
+				const exercise = currentParsed.exercises[exerciseIndex];
+				const param = exercise?.params.find(p => p.key === paramKey);
+				if (param?.value === newValue) {
+					return; // No change, skip update
+				}
 				currentParsed = updateParamValue(currentParsed, exerciseIndex, paramKey, newValue);
-				await updateFile(currentParsed);
+				hasPendingChanges = true;
+				// Don't save to file yet - wait for flush
 			},
+
+			onFlushChanges: flushChanges,
 
 			onPauseExercise: (): void => {
 				this.timerManager.pauseExercise(workoutId);

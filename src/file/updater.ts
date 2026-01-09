@@ -2,12 +2,39 @@ import { App, TFile } from 'obsidian';
 import { SectionInfo } from '../types';
 
 export class FileUpdater {
+	private updateLocks = new Map<string, Promise<void>>();
+
 	constructor(private app: App) {}
+
+	// Serialize updates to the same file to prevent race conditions
+	private async withLock<T>(filePath: string, fn: () => Promise<T>): Promise<T> {
+		// Wait for any pending update to complete
+		const pending = this.updateLocks.get(filePath);
+		if (pending) {
+			await pending;
+		}
+
+		// Create a new promise for our update
+		let resolve: () => void;
+		const lock = new Promise<void>(r => { resolve = r; });
+		this.updateLocks.set(filePath, lock);
+
+		try {
+			return await fn();
+		} finally {
+			resolve!();
+			// Clean up if this is still our lock
+			if (this.updateLocks.get(filePath) === lock) {
+				this.updateLocks.delete(filePath);
+			}
+		}
+	}
 
 	async updateCodeBlock(
 		sourcePath: string,
 		sectionInfo: SectionInfo | null,
-		newContent: string
+		newContent: string,
+		expectedTitle?: string
 	): Promise<void> {
 		const file = this.app.vault.getAbstractFileByPath(sourcePath);
 		if (!(file instanceof TFile)) {
@@ -20,26 +47,44 @@ export class FileUpdater {
 			return;
 		}
 
-		await this.app.vault.process(file, (content) => {
-			const lines = content.split('\n');
+		await this.withLock(sourcePath, async () => {
+			await this.app.vault.process(file, (content) => {
+				const lines = content.split('\n');
 
-			// Find the code block boundaries
-			// sectionInfo.lineStart points to the ```workout line
-			// sectionInfo.lineEnd points to the closing ``` line
-			const codeBlockStart = sectionInfo.lineStart;
-			const codeBlockEnd = sectionInfo.lineEnd;
+				// Validate that the target location still has a workout code block
+				const startLine = lines[sectionInfo.lineStart];
+				if (!startLine || !startLine.trim().startsWith('```workout')) {
+					console.error('Stale sectionInfo: expected ```workout at line', sectionInfo.lineStart);
+					return content; // Return unchanged
+				}
 
-			// Replace content between the code fences (exclusive of the fences themselves)
-			const beforeFence = lines.slice(0, codeBlockStart + 1);
-			const afterFence = lines.slice(codeBlockEnd);
+				// If we have an expected title, validate it matches
+				if (expectedTitle) {
+					const blockContent = lines.slice(sectionInfo.lineStart + 1, sectionInfo.lineEnd).join('\n');
+					const titleMatch = blockContent.match(/^title:\s*(.+)$/m);
+					const actualTitle = titleMatch?.[1]?.trim();
+					if (actualTitle && actualTitle !== expectedTitle) {
+						console.error('Title mismatch: expected', expectedTitle, 'but found', actualTitle);
+						return content; // Return unchanged
+					}
+				}
 
-			const newLines = [
-				...beforeFence,
-				newContent,
-				...afterFence
-			];
+				// Find the code block boundaries
+				const codeBlockStart = sectionInfo.lineStart;
+				const codeBlockEnd = sectionInfo.lineEnd;
 
-			return newLines.join('\n');
+				// Replace content between the code fences (exclusive of the fences themselves)
+				const beforeFence = lines.slice(0, codeBlockStart + 1);
+				const afterFence = lines.slice(codeBlockEnd);
+
+				const newLines = [
+					...beforeFence,
+					newContent,
+					...afterFence
+				];
+
+				return newLines.join('\n');
+			});
 		});
 	}
 

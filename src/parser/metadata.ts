@@ -1,4 +1,5 @@
 import { WorkoutMetadata, WorkoutState } from '../types';
+import { parseDurationToSeconds, formatDurationHuman } from './exercise';
 
 const VALID_STATES: WorkoutState[] = ['planned', 'started', 'completed'];
 
@@ -29,6 +30,12 @@ export function parseMetadata(lines: string[]): WorkoutMetadata {
 			case 'duration':
 				if (value) metadata.duration = value;
 				break;
+			case 'restduration':
+				if (value) {
+					const seconds = parseDurationToSeconds(value);
+					if (seconds > 0) metadata.restDuration = seconds;
+				}
+				break;
 		}
 	}
 
@@ -47,6 +54,9 @@ export function serializeMetadata(metadata: WorkoutMetadata): string[] {
 	}
 	if (metadata.duration !== undefined) {
 		lines.push(`duration: ${metadata.duration}`);
+	}
+	if (metadata.restDuration !== undefined) {
+		lines.push(`restDuration: ${formatDurationHuman(metadata.restDuration)}`);
 	}
 
 	return lines;

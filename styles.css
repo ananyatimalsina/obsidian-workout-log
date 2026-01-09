@@ -118,53 +118,62 @@
 	min-width: auto;
 }
 
-/* Params inline */
+/* Params inline - chip/pill style */
 .workout-exercise-params {
 	display: flex;
 	align-items: center;
-	gap: 12px;
+	gap: 8px;
 	flex: 1;
-	color: var(--text-muted);
 }
 
 .workout-param {
-	display: flex;
+	display: inline-flex;
 	align-items: center;
-	gap: 2px;
+	gap: 1px;
 	white-space: nowrap;
+	padding: 0 8px;
+	border-radius: 12px;
+	background: var(--background-modifier-hover);
+	font-size: 0.9em;
+	height: 28px;
+	overflow: hidden;
 }
 
-.workout-param-key {
-	color: var(--text-faint);
-	font-size: 0.9em;
+.workout-param-prefix {
+	color: var(--text-muted);
+	margin-right: 1px;
 }
 
 .workout-param-value {
 	color: var(--text-normal);
 	font-weight: 500;
-}
-
-.workout-param-input {
-	width: 36px;
-	padding: 1px 4px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 3px;
-	background: var(--background-secondary);
-	color: var(--text-normal);
-	font-family: var(--font-interface);
-	font-size: 1em;
-	font-weight: 500;
+	min-width: 20px;
 	text-align: center;
 }
 
+.workout-param-input {
+	width: 40px;
+	height: 20px;
+	padding: 0;
+	margin: 0;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	color: var(--text-normal);
+	font-family: inherit;
+	font-size: inherit;
+	font-weight: 500;
+	text-align: center;
+	box-sizing: border-box;
+}
+
 .workout-param-input:focus {
-	border-color: var(--interactive-accent);
 	outline: none;
 }
 
 .workout-param-unit {
-	color: var(--text-faint);
-	font-size: 0.9em;
+	color: var(--text-muted);
+	margin-left: 1px;
 }
 
 /* Timer */
@@ -222,11 +231,11 @@
 .workout-btn {
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
-	padding: 4px 10px;
+	justify-content: center;
+	padding: 4px 12px;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 4px;
-	background: var(--background-primary);
+	background: var(--background-secondary);
 	color: var(--text-normal);
 	font-family: var(--font-interface);
 	font-size: 0.85em;
@@ -235,21 +244,9 @@
 }
 
 .workout-btn:hover {
-	background: var(--background-modifier-hover);
-}
-
-.workout-btn-primary {
 	background: var(--interactive-accent);
 	color: var(--text-on-accent);
 	border-color: var(--interactive-accent);
-}
-
-.workout-btn-primary:hover {
-	background: var(--interactive-accent-hover);
-}
-
-.workout-btn-secondary {
-	background: var(--background-secondary);
 }
 
 .workout-btn-large {
@@ -258,9 +255,11 @@
 	font-weight: 500;
 }
 
-.workout-btn-icon {
-	font-size: 1em;
-	line-height: 1;
+/* Button group (finish actions) - just adds spacing before the group */
+.workout-btn-group {
+	display: inline-flex;
+	gap: 6px;
+	margin-left: 12px;
 }
 
 /* Completed label */
