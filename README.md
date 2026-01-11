@@ -19,6 +19,17 @@ Track your workouts directly in Obsidian with interactive timers, editable value
 
 ## Installation
 
+### Using BRAT (Recommended)
+The easiest way to install and keep the plugin updated, especially useful for mobile:
+
+1. Install the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin from Obsidian's Community Plugins
+2. Open BRAT settings (Settings → BRAT)
+3. Click "Add Beta plugin"
+4. Enter: `https://github.com/ldomaradzki/obsidian-workout-log`
+5. Enable the plugin in Settings → Community Plugins
+
+BRAT will automatically check for updates and notify you when new versions are available. Perfect for mobile users who can't manually copy files!
+
 ### Manual
 1. Download `main.js`, `manifest.json`, and `styles.css` from the latest release
 2. Create folder: `<vault>/.obsidian/plugins/workout-log/`
