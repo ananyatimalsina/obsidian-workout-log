@@ -311,6 +311,12 @@
 	margin-right: 6px;
 }
 
+/* Processing state for buttons (prevents double-tap issues on mobile) */
+.workout-btn-processing {
+	opacity: 0.7;
+	pointer-events: none;
+}
+
 /* Mobile Responsive Layout (phones and small tablets) */
 @media (max-width: 768px) {
 	/* Workout Container - More compact */
@@ -361,20 +367,21 @@
 		flex: 0 1 auto;
 	}
 
-	/* Params Container - Force to next line, allow internal wrapping */
+	/* Params Container - Own line but compact width */
 	.workout-exercise-params {
-		flex-basis: 100%;
+		flex: 0 0 100%;
 		flex-wrap: wrap;
 		gap: 6px;
 		order: 10;
+		justify-content: flex-start;
 	}
 
-	/* Individual Param Pills - Larger touch targets */
+	/* Individual Param Pills - Larger touch targets, compact width */
 	.workout-param {
+		flex: none;
 		height: 36px;
 		padding: 0 10px;
 		font-size: 0.95em;
-		min-width: 100px;
 	}
 
 	/* Input Fields - Much larger for touch */

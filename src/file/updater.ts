@@ -35,17 +35,19 @@ export class FileUpdater {
 		sectionInfo: SectionInfo | null,
 		newContent: string,
 		expectedTitle?: string
-	): Promise<void> {
+	): Promise<boolean> {
 		const file = this.app.vault.getAbstractFileByPath(sourcePath);
 		if (!(file instanceof TFile)) {
-			console.error('File not found:', sourcePath);
-			return;
+			console.error('Workout Log: File not found:', sourcePath);
+			return false;
 		}
 
 		if (!sectionInfo) {
-			console.error('No section info available');
-			return;
+			console.error('Workout Log: No section info available - cannot update file. Try navigating away and back.');
+			return false;
 		}
+
+		let updateSucceeded = false;
 
 		await this.withLock(sourcePath, async () => {
 			await this.app.vault.process(file, (content) => {
@@ -54,7 +56,7 @@ export class FileUpdater {
 				// Validate that the target location still has a workout code block
 				const startLine = lines[sectionInfo.lineStart];
 				if (!startLine || !startLine.trim().startsWith('```workout')) {
-					console.error('Stale sectionInfo: expected ```workout at line', sectionInfo.lineStart);
+					console.error('Workout Log: Stale sectionInfo - expected ```workout at line', sectionInfo.lineStart, '. Try navigating away and back.');
 					return content; // Return unchanged
 				}
 
@@ -64,7 +66,7 @@ export class FileUpdater {
 					const titleMatch = blockContent.match(/^title:\s*(.+)$/m);
 					const actualTitle = titleMatch?.[1]?.trim();
 					if (actualTitle && actualTitle !== expectedTitle) {
-						console.error('Title mismatch: expected', expectedTitle, 'but found', actualTitle);
+						console.error('Workout Log: Title mismatch - expected', expectedTitle, 'but found', actualTitle);
 						return content; // Return unchanged
 					}
 				}
@@ -83,9 +85,12 @@ export class FileUpdater {
 					...afterFence
 				];
 
+				updateSucceeded = true;
 				return newLines.join('\n');
 			});
 		});
+
+		return updateSucceeded;
 	}
 
 	async insertLineAfter(

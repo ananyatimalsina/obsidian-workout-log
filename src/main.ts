@@ -31,6 +31,12 @@ export default class WorkoutLogPlugin extends Plugin {
 	): void {
 		const parsed = parseWorkout(source);
 		const sectionInfo = ctx.getSectionInfo(el) as SectionInfo | null;
+
+		// Warn if sectionInfo is null - this can cause issues with multiple workouts
+		if (!sectionInfo) {
+			console.warn('Workout Log: sectionInfo is null for', ctx.sourcePath, '- file updates may not work correctly');
+		}
+
 		const workoutId = `${ctx.sourcePath}:${sectionInfo?.lineStart ?? 0}`;
 
 		// Sync timer state with parsed state (handles undo/external changes)

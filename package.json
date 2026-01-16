@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-workout-log",
-	"version": "1.0.0",
+	"version": "1.1.1",
 	"description": "A block-rendered workout tracker for Obsidian with timer functionality",
 	"main": "main.js",
 	"type": "module",
