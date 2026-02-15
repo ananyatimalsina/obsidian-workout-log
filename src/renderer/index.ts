@@ -1,6 +1,6 @@
 import { ParsedWorkout, WorkoutCallbacks, TimerState } from '../types';
 import { renderHeader, updateHeaderTimer } from './header';
-import { renderExercise, updateExerciseTimer, ExerciseElements } from './exercise';
+import { renderExercise, updateExerciseTimer, renderExerciseControls, ExerciseElements } from './exercise';
 import { renderWorkoutControls } from './controls';
 import { renderEmptyState } from './emptyState';
 import { TimerManager } from '../timer/manager';
@@ -65,8 +65,7 @@ export function renderWorkout(ctx: RendererContext): void {
 			isActive,
 			isActive ? timerState : null,
 			callbacks,
-			parsed.metadata.state,
-			parsed.metadata.restDuration
+			parsed.metadata.state
 		);
 		exerciseElements.push(elements);
 	}
@@ -89,6 +88,8 @@ export function renderWorkout(ctx: RendererContext): void {
 		let lastKnownActiveIndex = initialActiveIndex;
 		// Flag to prevent multiple auto-advances from this render instance
 		let hasAutoAdvanced = false;
+		// Track rest state to detect transitions
+		let wasResting = timerState?.isResting ?? false;
 
 		timerManager.subscribe(workoutId, (state: TimerState) => {
 			// Update header timer
@@ -108,19 +109,51 @@ export function renderWorkout(ctx: RendererContext): void {
 			const activeExercise = parsed.exercises[currentActiveIndex];
 
 			if (activeElements?.timerEl && activeExercise) {
-				updateExerciseTimer(
-					activeElements.timerEl,
-					state,
-					activeExercise.targetDuration
-				);
+				// Check if rest state changed - if so, re-render controls
+				if (state.isResting !== wasResting) {
+					wasResting = state.isResting;
+					// Re-render exercise controls for rest state change
+					const controlsEl = activeElements.container.querySelector('.workout-exercise-controls');
+					if (controlsEl) {
+						controlsEl.remove();
+					}
+					if (parsed.metadata.state === 'started') {
+						renderExerciseControls(activeElements.container, currentActiveIndex, state.isResting, callbacks);
+					}
+				}
 
-				// Check for auto-advance on countdown completion
-				// Only trigger once per render instance
-				if (!hasAutoAdvanced && activeExercise.targetDuration !== undefined) {
-					if (state.exerciseElapsed >= activeExercise.targetDuration) {
+				// Check if we're in rest mode
+				if (state.isResting) {
+					// Show rest timer overlay
+					updateExerciseTimer(
+						activeElements.timerEl,
+						state,
+						activeExercise.targetDuration,
+						true // isResting flag
+					);
+
+					// Check for auto-advance when rest completes
+					if (!hasAutoAdvanced && state.restRemaining !== undefined && state.restRemaining <= 0) {
 						hasAutoAdvanced = true;
-						// Auto-advance to next exercise
-						callbacks.onExerciseFinish(currentActiveIndex);
+						// Auto-complete rest and advance
+						callbacks.onRestComplete(currentActiveIndex);
+					}
+				} else {
+					// Normal exercise timer
+					updateExerciseTimer(
+						activeElements.timerEl,
+						state,
+						activeExercise.targetDuration
+					);
+
+					// Check for auto-advance on countdown completion
+					// Only trigger once per render instance
+					if (!hasAutoAdvanced && activeExercise.targetDuration !== undefined) {
+						if (state.exerciseElapsed >= activeExercise.targetDuration) {
+							hasAutoAdvanced = true;
+							// Auto-advance to next exercise
+							callbacks.onExerciseFinish(currentActiveIndex);
+						}
 					}
 				}
 			}

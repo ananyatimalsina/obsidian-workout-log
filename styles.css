@@ -196,6 +196,11 @@
 	color: var(--color-red);
 }
 
+.workout-exercise-timer.resting {
+	color: var(--color-cyan);
+	font-weight: 600;
+}
+
 .timer-indicator {
 	margin-left: 2px;
 	font-size: 0.85em;
@@ -215,6 +220,10 @@
 
 .timer-indicator.overtime {
 	color: var(--color-red);
+}
+
+.timer-indicator.rest-count-down {
+	color: var(--color-cyan);
 }
 
 /* Exercise Controls */
