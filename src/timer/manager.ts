@@ -19,6 +19,9 @@ export class TimerManager {
 			existing.exercisePausedTime = 0;
 			existing.isPaused = false;
 			existing.activeExerciseIndex = activeExerciseIndex;
+			existing.isResting = false;
+			existing.restStartTime = 0;
+			existing.restDuration = undefined;
 		} else {
 			this.timers.set(workoutId, {
 				workoutId,
@@ -27,6 +30,8 @@ export class TimerManager {
 				exercisePausedTime: 0,
 				isPaused: false,
 				activeExerciseIndex,
+				isResting: false,
+				restStartTime: 0,
 				callbacks: new Set()
 			});
 		}
@@ -42,6 +47,32 @@ export class TimerManager {
 		timer.exercisePausedTime = 0;
 		timer.isPaused = false;
 		timer.activeExerciseIndex = newExerciseIndex;
+		timer.isResting = false;
+		timer.restStartTime = 0;
+		timer.restDuration = undefined;
+	}
+
+	startRest(workoutId: string, restDuration: number): void {
+		const timer = this.timers.get(workoutId);
+		if (!timer) return;
+
+		timer.isResting = true;
+		timer.restStartTime = Date.now();
+		timer.restDuration = restDuration;
+	}
+
+	endRest(workoutId: string): void {
+		const timer = this.timers.get(workoutId);
+		if (!timer) return;
+
+		timer.isResting = false;
+		timer.restStartTime = 0;
+		timer.restDuration = undefined;
+	}
+
+	isResting(workoutId: string): boolean {
+		const timer = this.timers.get(workoutId);
+		return timer?.isResting ?? false;
 	}
 
 	pauseExercise(workoutId: string): void {
@@ -109,10 +140,24 @@ export class TimerManager {
 			exerciseElapsed = Math.floor((timer.exercisePausedTime + currentExerciseTime) / 1000);
 		}
 
+		// Rest state
+		let restElapsed: number | undefined;
+		let restRemaining: number | undefined;
+		if (timer.isResting && timer.restStartTime > 0) {
+			const restTime = now - timer.restStartTime;
+			restElapsed = Math.floor(restTime / 1000);
+			if (timer.restDuration !== undefined) {
+				restRemaining = Math.max(0, timer.restDuration - restElapsed);
+			}
+		}
+
 		return {
 			workoutElapsed,
 			exerciseElapsed,
-			isOvertime: false  // Calculated by caller with target duration
+			isOvertime: false,  // Calculated by caller with target duration
+			isResting: timer.isResting,
+			restElapsed,
+			restRemaining
 		};
 	}
 

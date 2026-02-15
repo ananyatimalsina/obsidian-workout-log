@@ -38,20 +38,30 @@ export function parseExercise(line: string, lineIndex: number): Exercise | null 
 	const params: ExerciseParam[] = [];
 	let targetDuration: number | undefined;
 	let recordedDuration: string | undefined;
+	let restAfter: number | undefined;
 
 	for (const paramStr of paramStrings) {
 		const param = parseParam(paramStr);
 		if (param) {
-			params.push(param);
+			// Special handling for Rest key
+			if (param.key.toLowerCase() === 'rest') {
+				// Parse rest duration, only store if editable (rest is optional per-exercise)
+				if (param.editable && param.value) {
+					restAfter = parseDurationToSeconds(param.value);
+				}
+			} else {
+				// Add all non-Rest params to the params array
+				params.push(param);
 
-			// Special handling for Duration key
-			if (param.key.toLowerCase() === 'duration') {
-				if (param.editable) {
-					// Editable duration = countdown target
-					targetDuration = parseDurationToSeconds(param.value);
-				} else {
-					// Locked duration = recorded time
-					recordedDuration = param.value + (param.unit ? ` ${param.unit}` : '');
+				// Special handling for Duration key
+				if (param.key.toLowerCase() === 'duration') {
+					if (param.editable) {
+						// Editable duration = countdown target
+						targetDuration = parseDurationToSeconds(param.value);
+					} else {
+						// Locked duration = recorded time
+						recordedDuration = param.value + (param.unit ? ` ${param.unit}` : '');
+					}
 				}
 			}
 		}
@@ -63,6 +73,7 @@ export function parseExercise(line: string, lineIndex: number): Exercise | null 
 		params,
 		targetDuration,
 		recordedDuration,
+		restAfter,
 		lineIndex
 	};
 }
@@ -175,6 +186,11 @@ export function serializeExercise(exercise: Exercise): string {
 		if (param.unit) {
 			line += ` ${param.unit}`;
 		}
+	}
+
+	// Append Rest parameter if present
+	if (exercise.restAfter !== undefined) {
+		line += ` | Rest: [${exercise.restAfter}s]`;
 	}
 
 	return line;

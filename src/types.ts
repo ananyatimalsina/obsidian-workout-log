@@ -31,6 +31,7 @@ export interface Exercise {
 	params: ExerciseParam[];
 	targetDuration?: number;     // Target duration in seconds (for countdown)
 	recordedDuration?: string;   // Recorded duration after completion
+	restAfter?: number;          // Rest duration in seconds after this exercise (optional)
 	lineIndex: number;           // Line index relative to exercise section start
 }
 
@@ -50,6 +51,9 @@ export interface TimerInstance {
 	exercisePausedTime: number;  // Accumulated paused time for current exercise
 	isPaused: boolean;
 	activeExerciseIndex: number;
+	isResting: boolean;          // True if currently in rest period
+	restStartTime: number;       // Timestamp when rest started
+	restDuration?: number;       // Target rest duration in seconds
 	callbacks: Set<TimerCallback>;
 }
 
@@ -59,6 +63,9 @@ export interface TimerState {
 	exerciseElapsed: number;     // Current exercise elapsed seconds
 	remaining?: number;          // Seconds remaining (countdown mode)
 	isOvertime: boolean;         // True if countdown exceeded
+	isResting: boolean;          // True if in rest period
+	restElapsed?: number;        // Rest elapsed seconds
+	restRemaining?: number;      // Rest seconds remaining
 }
 
 export type TimerCallback = (state: TimerState) => void;
@@ -71,6 +78,8 @@ export interface WorkoutCallbacks {
 	onExerciseAddSet: (exerciseIndex: number) => Promise<void>;
 	onExerciseAddRest: (exerciseIndex: number) => Promise<void>;
 	onExerciseSkip: (exerciseIndex: number) => Promise<void>;
+	onRestComplete: (exerciseIndex: number) => Promise<void>;
+	onRestSkip: (exerciseIndex: number) => Promise<void>;
 	onParamChange: (exerciseIndex: number, paramKey: string, newValue: string) => void;
 	onFlushChanges: () => Promise<void>;
 	onPauseExercise: () => void;
