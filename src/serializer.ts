@@ -66,34 +66,13 @@ export function lockAllFields(parsed: ParsedWorkout): ParsedWorkout {
 	return newParsed;
 }
 
-// Add a rest exercise after the specified index
-export function addRest(parsed: ParsedWorkout, exerciseIndex: number, restDuration: number): ParsedWorkout {
+// Add or update rest duration for an exercise
+export function setRestAfter(parsed: ParsedWorkout, exerciseIndex: number, restDuration: number | undefined): ParsedWorkout {
 	const newParsed = structuredClone(parsed);
-	const currentExercise = newParsed.exercises[exerciseIndex];
-	if (!currentExercise) return parsed;
+	const exercise = newParsed.exercises[exerciseIndex];
+	if (!exercise) return parsed;
 
-	// Create a Rest exercise with countdown duration
-	const restExercise: Exercise = {
-		state: 'pending',
-		name: 'Rest',
-		params: [{
-			key: 'Duration',
-			value: `${restDuration}s`,
-			editable: true
-		}],
-		targetDuration: restDuration,
-		lineIndex: currentExercise.lineIndex + 1
-	};
-
-	// Insert after current exercise
-	newParsed.exercises.splice(exerciseIndex + 1, 0, restExercise);
-
-	// Update line indices for subsequent exercises
-	for (let i = exerciseIndex + 2; i < newParsed.exercises.length; i++) {
-		const ex = newParsed.exercises[i];
-		if (ex) ex.lineIndex++;
-	}
-
+	exercise.restAfter = restDuration;
 	return newParsed;
 }
 
@@ -176,27 +155,15 @@ export function createSampleWorkout(): ParsedWorkout {
 				{ key: 'Weight', value: '60', editable: true, unit: 'kg' },
 				{ key: 'Reps', value: '12', editable: true }
 			],
+			restAfter: 60,
 			lineIndex: 0
-		},
-		{
-			state: 'pending',
-			name: 'Rest',
-			params: [{ key: 'Duration', value: '60s', editable: true }],
-			targetDuration: 60,
-			lineIndex: 1
 		},
 		{
 			state: 'pending',
 			name: 'Push-ups',
 			params: [{ key: 'Reps', value: '15', editable: true }],
-			lineIndex: 2
-		},
-		{
-			state: 'pending',
-			name: 'Rest',
-			params: [{ key: 'Duration', value: '60s', editable: true }],
-			targetDuration: 60,
-			lineIndex: 3
+			restAfter: 60,
+			lineIndex: 1
 		},
 		{
 			state: 'pending',
@@ -205,34 +172,22 @@ export function createSampleWorkout(): ParsedWorkout {
 				{ key: 'Weight', value: '20', editable: true, unit: 'kg' },
 				{ key: 'Reps', value: '10', editable: true, unit: '/arm' }
 			],
-			lineIndex: 4
-		},
-		{
-			state: 'pending',
-			name: 'Rest',
-			params: [{ key: 'Duration', value: '60s', editable: true }],
-			targetDuration: 60,
-			lineIndex: 5
+			restAfter: 60,
+			lineIndex: 2
 		},
 		{
 			state: 'pending',
 			name: 'Plank Hold',
 			params: [{ key: 'Duration', value: '45s', editable: true }],
 			targetDuration: 45,
-			lineIndex: 6
-		},
-		{
-			state: 'pending',
-			name: 'Rest',
-			params: [{ key: 'Duration', value: '60s', editable: true }],
-			targetDuration: 60,
-			lineIndex: 7
+			restAfter: 60,
+			lineIndex: 3
 		},
 		{
 			state: 'pending',
 			name: 'Lunges',
 			params: [{ key: 'Reps', value: '10', editable: true, unit: '/leg' }],
-			lineIndex: 8
+			lineIndex: 4
 		}
 	];
 
@@ -297,6 +252,11 @@ export function serializeWorkoutAsTemplate(parsed: ParsedWorkout): string {
 			if (param.unit) {
 				line += ` ${param.unit}`;
 			}
+		}
+
+		// Add Rest parameter if present
+		if (exercise.restAfter !== undefined) {
+			line += ` | Rest: [${exercise.restAfter}s]`;
 		}
 
 		lines.push(line);

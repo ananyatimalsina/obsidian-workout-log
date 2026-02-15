@@ -38,8 +38,7 @@ export function renderExercise(
 	isActive: boolean,
 	timerState: TimerState | null,
 	callbacks: WorkoutCallbacks,
-	workoutState: 'planned' | 'started' | 'completed',
-	restDuration?: number
+	workoutState: 'planned' | 'started' | 'completed'
 ): ExerciseElements {
 	const isSimple = !hasDisplayableParams(exercise);
 	const exerciseEl = container.createDiv({
@@ -122,68 +121,81 @@ export function renderExercise(
 
 	// Controls row (only for active exercise during workout)
 	if (isActive && workoutState === 'started') {
-		renderExerciseControls(exerciseEl, index, callbacks, restDuration);
+		renderExerciseControls(exerciseEl, index, timerState?.isResting ?? false, callbacks);
 	}
 
 	return { container: exerciseEl, timerEl, inputs };
 }
 
-function renderExerciseControls(
+export function renderExerciseControls(
 	exerciseEl: HTMLElement,
 	index: number,
-	callbacks: WorkoutCallbacks,
-	restDuration?: number
+	isResting: boolean,
+	callbacks: WorkoutCallbacks
 ): void {
 	const controlsEl = exerciseEl.createDiv({ cls: 'workout-exercise-controls' });
 
-	// Pause/Resume button
-	const pauseBtn = controlsEl.createEl('button', { cls: 'workout-btn', text: 'Pause' });
-	pauseBtn.addEventListener('click', () => {
-		if (pauseBtn.textContent === 'Pause') {
-			callbacks.onPauseExercise();
-			pauseBtn.textContent = 'Resume';
-		} else {
-			callbacks.onResumeExercise();
-			pauseBtn.textContent = 'Pause';
-		}
-	});
+	if (isResting) {
+		// Rest mode - show only Skip Rest button
+		const skipRestBtn = controlsEl.createEl('button', { cls: 'workout-btn workout-btn-primary', text: 'Skip Rest' });
+		skipRestBtn.addEventListener('click', () => {
+			callbacks.onRestSkip(index);
+		});
+	} else {
+		// Normal exercise mode - show regular controls
+		// Pause/Resume button
+		const pauseBtn = controlsEl.createEl('button', { cls: 'workout-btn', text: 'Pause' });
+		pauseBtn.addEventListener('click', () => {
+			if (pauseBtn.textContent === 'Pause') {
+				callbacks.onPauseExercise();
+				pauseBtn.textContent = 'Resume';
+			} else {
+				callbacks.onResumeExercise();
+				pauseBtn.textContent = 'Pause';
+			}
+		});
 
-	// Skip button
-	const skipBtn = controlsEl.createEl('button', { cls: 'workout-btn', text: 'Skip' });
-	skipBtn.addEventListener('click', () => {
-		callbacks.onExerciseSkip(index);
-	});
+		// Skip button
+		const skipBtn = controlsEl.createEl('button', { cls: 'workout-btn', text: 'Skip' });
+		skipBtn.addEventListener('click', () => {
+			callbacks.onExerciseSkip(index);
+		});
 
-	// Finish group container
-	const finishGroup = controlsEl.createDiv({ cls: 'workout-btn-group' });
+		// Finish group container
+		const finishGroup = controlsEl.createDiv({ cls: 'workout-btn-group' });
 
-	// Add Set button
-	const addSetBtn = finishGroup.createEl('button', { cls: 'workout-btn', text: '+ Set' });
-	addSetBtn.addEventListener('click', () => {
-		callbacks.onExerciseAddSet(index);
-	});
+		// Add Set button
+		const addSetBtn = finishGroup.createEl('button', { cls: 'workout-btn', text: '+ Set' });
+		addSetBtn.addEventListener('click', () => {
+			callbacks.onExerciseAddSet(index);
+		});
 
-	// Add Rest button (only if restDuration is defined)
-	if (restDuration !== undefined) {
-		const addRestBtn = finishGroup.createEl('button', { cls: 'workout-btn', text: '+ Rest' });
-		addRestBtn.addEventListener('click', () => {
-			callbacks.onExerciseAddRest(index);
+		// Next button (finish current, move to next)
+		const nextBtn = finishGroup.createEl('button', { cls: 'workout-btn', text: 'Next' });
+		nextBtn.addEventListener('click', () => {
+			callbacks.onExerciseFinish(index);
 		});
 	}
-
-	// Next button (finish current, move to next)
-	const nextBtn = finishGroup.createEl('button', { cls: 'workout-btn', text: 'Next' });
-	nextBtn.addEventListener('click', () => {
-		callbacks.onExerciseFinish(index);
-	});
 }
 
 export function updateExerciseTimer(
 	timerEl: HTMLElement,
 	timerState: TimerState,
-	targetDuration?: number
+	targetDuration?: number,
+	isResting?: boolean
 ): void {
 	timerEl.empty();
+
+	// Rest mode - show rest timer counting DOWN
+	if (isResting && timerState.restRemaining !== undefined) {
+		timerEl.textContent = `Rest: ${formatDuration(timerState.restRemaining)}`;
+		timerEl.addClass('resting');
+		timerEl.createSpan({ cls: 'timer-indicator rest-count-down', text: ' ▼' });
+		return;
+	}
+
+	// Remove rest styling if not resting
+	timerEl.removeClass('resting');
 
 	if (targetDuration !== undefined) {
 		// Countdown mode

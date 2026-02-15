@@ -12,7 +12,7 @@ Track your workouts directly in Obsidian with interactive timers, editable value
 
 - **Timers**: Count-up for exercises, countdown for rest periods with auto-advance
 - **Editable values**: Click to edit weight, reps, or duration during workout
-- **Add Set / Add Rest**: Quickly add extra sets or rest periods on the fly
+- **Add Set**: Quickly add extra sets on the fly
 - **Skip / Pause / Resume**: Full control over your workout flow
 - **Copy as Template**: Reuse completed workouts as templates
 - **Undo support**: Ctrl+Z works - syncs timer state with file changes
@@ -51,9 +51,8 @@ startDate:
 duration:
 restDuration: 45s
 ---
-- [ ] Squats | Weight: [60] kg | Reps: [10]
-- [ ] Rest | Duration: [45s]
-- [ ] Bench Press | Weight: [40] kg | Reps: [8]
+- [ ] Squats | Weight: [60] kg | Reps: [10] | Rest: [45s]
+- [ ] Bench Press | Weight: [40] kg | Reps: [8] | Rest: [60s]
 - [ ] Plank | Duration: [60s]
 ```
 ````
@@ -67,17 +66,18 @@ restDuration: 45s
 | `state` | `planned`, `started`, or `completed` |
 | `startDate` | Auto-filled when workout starts |
 | `duration` | Auto-filled when workout completes |
-| `restDuration` | Default duration for "+ Rest" button |
+| `restDuration` | Default rest duration (fallback if exercise doesn't specify Rest) |
 
 ### Exercise Format
 
 ```
-- [ ] Exercise Name | Key: [value] unit | Key: value
+- [ ] Exercise Name | Key: [value] unit | Key: value | Rest: [60s]
 ```
 
 - `[ ]` pending, `[\]` in progress, `[x]` completed, `[-]` skipped
 - `[value]` = editable, `value` = locked
 - `Duration: [60s]` = countdown timer
+- `Rest: [60s]` = rest period after exercise (optional, falls back to `restDuration`)
 
 ## Examples
 
@@ -90,8 +90,8 @@ startDate:
 duration:
 restDuration: 90s
 ---
-- [ ] Bench Press | Weight: [60] kg | Reps: [8]
-- [ ] Overhead Press | Weight: [30] kg | Reps: [10]
+- [ ] Bench Press | Weight: [60] kg | Reps: [8] | Rest: [90s]
+- [ ] Overhead Press | Weight: [30] kg | Reps: [10] | Rest: [90s]
 - [ ] Tricep Dips | Reps: [12]
 ```
 
@@ -102,11 +102,10 @@ title: Quick HIIT
 state: planned
 startDate:
 duration:
+restDuration: 10s
 ---
-- [ ] Jumping Jacks | Duration: [30s]
-- [ ] Rest | Duration: [10s]
-- [ ] Burpees | Duration: [30s]
-- [ ] Rest | Duration: [10s]
+- [ ] Jumping Jacks | Duration: [30s] | Rest: [10s]
+- [ ] Burpees | Duration: [30s] | Rest: [10s]
 - [ ] Mountain Climbers | Duration: [30s]
 ```
 
