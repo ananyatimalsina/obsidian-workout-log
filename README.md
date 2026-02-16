@@ -186,8 +186,6 @@ restDuration: 60s
 
 ### Strength Training with Progression
 
-### Strength Training with Progression
-
 ```workout
 title: Push Day
 state: planned
