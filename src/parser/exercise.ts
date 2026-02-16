@@ -1,4 +1,5 @@
 import { Exercise, ExerciseState, ExerciseParam } from '../types';
+import { parseProgressionValue, formatProgressionValue } from '../progression';
 
 // Checkbox patterns: [ ] pending, [\] inProgress, [x] completed, [-] skipped
 const EXERCISE_PATTERN = /^-\s*\[(.)\]\s*(.+)$/;
@@ -80,35 +81,49 @@ export function parseExercise(line: string, lineIndex: number): Exercise | null 
 
 function parseParam(paramStr: string): ExerciseParam | null {
 	// Handle simple format: Key: value or Key: [value] or Key: [value] unit
+	// Also handles progression: Key: [(formula)value] or Key: (formula)value
 	const colonIndex = paramStr.indexOf(':');
 	if (colonIndex === -1) return null;
 
 	const key = paramStr.substring(0, colonIndex).trim();
 	const rest = paramStr.substring(colonIndex + 1).trim();
 
-	// Check for bracketed value
+	// Check for bracketed value (editable)
 	const bracketMatch = rest.match(/^\[([^\]]*)\](.*)$/);
 	if (bracketMatch) {
-		const value = bracketMatch[1] ?? '';
+		const bracketContent = bracketMatch[1] ?? '';
 		const afterBracket = (bracketMatch[2] ?? '').trim();
+		
+		// Parse progression formula, bounds, and value from bracket content
+		const { value, progressionFormula, initialValue, maxValue } = parseProgressionValue(bracketContent);
+		
 		return {
 			key,
 			value,
 			editable: true,
-			unit: afterBracket || undefined
+			unit: afterBracket || undefined,
+			progressionFormula,
+			initialValue,
+			maxValue
 		};
 	}
 
-	// No brackets - split on first space for value and unit
+	// No brackets - locked value, split on first space for value and unit
 	const parts = rest.split(/\s+/);
-	const value = parts[0] ?? '';
+	const firstPart = parts[0] ?? '';
 	const unit = parts.slice(1).join(' ') || undefined;
+	
+	// Parse progression formula, bounds, and value from non-bracketed value
+	const { value, progressionFormula, initialValue, maxValue } = parseProgressionValue(firstPart);
 
 	return {
 		key,
 		value,
 		editable: false,
-		unit
+		unit,
+		progressionFormula,
+		initialValue,
+		maxValue
 	};
 }
 
@@ -178,10 +193,19 @@ export function serializeExercise(exercise: Exercise): string {
 	for (const param of exercise.params) {
 		line += ' | ';
 		line += `${param.key}: `;
+		
+		// Format value with progression formula and bounds if present
+		const formattedValue = formatProgressionValue(
+			param.value, 
+			param.progressionFormula,
+			param.initialValue,
+			param.maxValue
+		);
+		
 		if (param.editable) {
-			line += `[${param.value}]`;
+			line += `[${formattedValue}]`;
 		} else {
-			line += param.value;
+			line += formattedValue;
 		}
 		if (param.unit) {
 			line += ` ${param.unit}`;

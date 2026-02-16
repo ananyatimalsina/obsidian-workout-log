@@ -10,20 +10,30 @@ export function renderWorkoutControls(
 
 	if (state === 'planned') {
 		const startBtn = controlsEl.createEl('button', {
-			cls: 'workout-btn workout-btn-primary workout-btn-large'
+			cls: 'workout-btn workout-btn-primary workout-btn-large',
+			attr: { type: 'button' }
 		});
 		startBtn.createSpan({ cls: 'workout-btn-icon', text: '▶' });
 		startBtn.createSpan({ text: 'Start Workout' });
 
-		// Use a flag to prevent double-triggers on mobile
+		// Use a flag to prevent double-triggers
 		let isProcessing = false;
-		const handleStart = async () => {
-			if (isProcessing) return;
+		const handleStart = async (e: MouseEvent) => {
+			e.preventDefault();
+			e.stopPropagation();
+			
+			if (isProcessing) {
+				return;
+			}
+			
 			isProcessing = true;
 			startBtn.addClass('workout-btn-processing');
 			startBtn.setAttribute('disabled', 'true');
+			
 			try {
 				await callbacks.onStartWorkout();
+			} catch (error) {
+				console.error('[Workout Log] Error starting workout:', error);
 			} finally {
 				// Button will be gone after re-render, but reset just in case
 				isProcessing = false;
@@ -31,7 +41,8 @@ export function renderWorkoutControls(
 				startBtn.removeAttribute('disabled');
 			}
 		};
-		startBtn.addEventListener('click', handleStart);
+		
+		startBtn.addEventListener('click', handleStart, { capture: true });
 	} else if (state === 'completed') {
 		// Completed label
 		const completedLabel = controlsEl.createSpan({ cls: 'workout-completed-label' });

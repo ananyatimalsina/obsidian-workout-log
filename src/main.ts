@@ -4,10 +4,11 @@ import { serializeWorkout, updateParamValue, updateExerciseState, addSet, setRec
 import { renderWorkout } from './renderer';
 import { TimerManager } from './timer/manager';
 import { FileUpdater } from './file/updater';
-import { ParsedWorkout, WorkoutCallbacks, SectionInfo, Exercise, WorkoutLogSettings } from './types';
+import { ParsedWorkout, WorkoutCallbacks, SectionInfo, Exercise, WorkoutLogSettings, ExerciseParam } from './types';
 import { formatDurationHuman } from './parser/exercise';
 import { DEFAULT_SETTINGS, WorkoutLogSettingTab } from './settings';
 import { WorkoutLogger } from './logger';
+import { applyProgression } from './progression';
 
 export default class WorkoutLogPlugin extends Plugin {
 	private timerManager: TimerManager = new TimerManager();
@@ -52,7 +53,7 @@ export default class WorkoutLogPlugin extends Plugin {
 		this.timerManager.destroy();
 	}
 
-	private processWorkoutBlock(
+	private 	processWorkoutBlock(
 		source: string,
 		el: HTMLElement,
 		ctx: MarkdownPostProcessorContext
@@ -60,12 +61,16 @@ export default class WorkoutLogPlugin extends Plugin {
 		const parsed = parseWorkout(source);
 		const sectionInfo = ctx.getSectionInfo(el) as SectionInfo | null;
 
-		// Warn if sectionInfo is null - this can cause issues with multiple workouts
-		if (!sectionInfo) {
-			console.warn('Workout Log: sectionInfo is null for', ctx.sourcePath, '- file updates may not work correctly');
-		}
+		// Use a stable workout ID based on source content hash instead of line numbers
+		// Line numbers change when metadata is added (startDate, duration, etc.)
+		// We'll use the original source position + a hash of the initial exercises
+		const sourceHash = this.getWorkoutHash(parsed);
+		const workoutId = `${ctx.sourcePath}:${sourceHash}`;
 
-		const workoutId = `${ctx.sourcePath}:${sectionInfo?.lineStart ?? 0}`;
+		// Warn if sectionInfo is null on initial load
+		if (!sectionInfo) {
+			console.warn('[Workout Log] sectionInfo is null for', ctx.sourcePath, '- file updates will not work until you switch to edit mode and back');
+		}
 
 		// Sync timer state with parsed state (handles undo/external changes)
 		const isTimerRunning = this.timerManager.isTimerRunning(workoutId);
@@ -82,7 +87,7 @@ export default class WorkoutLogPlugin extends Plugin {
 			}
 		}
 
-		const callbacks = this.createCallbacks(ctx, sectionInfo, parsed, workoutId);
+		const callbacks = this.createCallbacks(ctx, sectionInfo, parsed, workoutId, el);
 
 		renderWorkout({
 			el,
@@ -97,19 +102,39 @@ export default class WorkoutLogPlugin extends Plugin {
 		ctx: MarkdownPostProcessorContext,
 		sectionInfo: SectionInfo | null,
 		parsed: ParsedWorkout,
-		workoutId: string
+		workoutId: string,
+		el: HTMLElement
 	): WorkoutCallbacks {
 		// Keep a reference to current parsed state
 		let currentParsed = parsed;
+		
+		// Function to get fresh sectionInfo before each file update
+		const getSectionInfo = (): SectionInfo | null => {
+			return ctx.getSectionInfo(el) as SectionInfo | null;
+		};
 		let hasPendingChanges = false;
 
 		const updateFile = async (newParsed: ParsedWorkout): Promise<void> => {
 			currentParsed = newParsed;
 			hasPendingChanges = false;
+			
+			// Get fresh sectionInfo before each update to avoid stale line numbers
+			const freshSectionInfo = getSectionInfo();
+			
+			// Check if sectionInfo is available
+			if (!freshSectionInfo) {
+				console.error('[Workout Log] Cannot update file - sectionInfo is null. Please switch to edit mode and back to reading mode to fix this.');
+				return;
+			}
+			
 			const newContent = serializeWorkout(newParsed);
 			// Pass title for validation to prevent cross-block contamination
 			const expectedTitle = currentParsed.metadata.title;
-			await this.fileUpdater?.updateCodeBlock(ctx.sourcePath, sectionInfo, newContent, expectedTitle);
+			const success = await this.fileUpdater?.updateCodeBlock(ctx.sourcePath, freshSectionInfo, newContent, expectedTitle);
+			
+			if (!success) {
+				console.error('[Workout Log] File update failed');
+			}
 		};
 
 		// Flush any pending param changes to file
@@ -121,6 +146,12 @@ export default class WorkoutLogPlugin extends Plugin {
 
 		return {
 			onStartWorkout: async (): Promise<void> => {
+				// Check if we have valid section info
+				if (!sectionInfo) {
+					console.error('[Workout Log] Cannot start workout - sectionInfo is null. This usually happens on initial load. Try switching to edit mode and back.');
+					return;
+				}
+				
 				hasPendingChanges = false; // Will be saved by updateFile below
 				// Update state to started
 				currentParsed.metadata.state = 'started';
@@ -135,10 +166,11 @@ export default class WorkoutLogPlugin extends Plugin {
 					}
 				}
 
-				await updateFile(currentParsed);
-
-				// Start timers
+				// Start timer BEFORE updateFile to avoid race condition
+				// This ensures timer is running when Obsidian re-renders after file update
 				this.timerManager.startWorkoutTimer(workoutId, firstPending >= 0 ? firstPending : 0);
+
+				await updateFile(currentParsed);
 			},
 
 			onFinishWorkout: async (): Promise<void> => {
@@ -431,44 +463,151 @@ export default class WorkoutLogPlugin extends Plugin {
 			onAddSample: async (): Promise<void> => {
 				const sampleWorkout = createSampleWorkout();
 				const newContent = serializeWorkout(sampleWorkout);
+				
+				// Get fresh sectionInfo before update
+				const freshSectionInfo = getSectionInfo();
+				if (!freshSectionInfo) {
+					console.error('[Workout Log] Cannot add sample - sectionInfo is null');
+					return;
+				}
+				
 				await this.fileUpdater?.updateCodeBlock(
 					ctx.sourcePath,
-					sectionInfo,
+					freshSectionInfo,
 					newContent,
 					sampleWorkout.metadata.title
 				);
-			}
+			},
+			
+			getSectionInfo
 		};
 	}
 
+	/**
+	 * Reset workout to planned state after completion, applying progression and adding sets as needed
+	 */
 	private resetWorkout(workout: ParsedWorkout): ParsedWorkout {
 		// Reset metadata
 		workout.metadata.state = 'planned';
 		workout.metadata.startDate = undefined;
 		workout.metadata.duration = undefined;
 
-		// Reset all exercises to pending state and unlock fields
-		workout.exercises = workout.exercises.map(exercise => ({
-			...exercise,
-			state: 'pending',
-			recordedDuration: undefined,
-			params: exercise.params
-				.filter(param => {
-					// Remove recorded duration params (non-editable, non-target durations)
-					if (param.key.toLowerCase() === 'duration' && !param.editable && !exercise.targetDuration) {
-						return false;
-					}
-					return true;
-				})
-				.map(param => ({
+		// Track which exercise names need new sets added (stores last occurrence index)
+		const setAdditionNeeded = new Map<string, number>();
+
+		// Apply progression to all exercises and track which need new sets
+		workout.exercises = workout.exercises.map((exercise, index) => {
+			const filteredParams = this.removeRecordedDurations(exercise);
+			const progressionResult = applyProgression(filteredParams);
+			
+			const resetExercise = {
+				...exercise,
+				state: 'pending' as const,
+				recordedDuration: undefined,
+				params: progressionResult.params.map(param => ({
 					...param,
-					// Make editable if it was editable before, or if it's a target duration
 					locked: false,
 					editable: param.editable || (param.key.toLowerCase() === 'duration' && exercise.targetDuration !== undefined)
 				}))
-		}));
+			};
+
+			// Track last index for exercises needing set addition
+			if (progressionResult.shouldAddSet) {
+				setAdditionNeeded.set(exercise.name, index);
+			}
+			
+			return resetExercise;
+		});
+
+		// Add new sets and reset params for exercises that hit max
+		if (setAdditionNeeded.size > 0) {
+			workout = this.addNewSetsAndReset(workout, setAdditionNeeded);
+		}
 
 		return workout;
+	}
+
+	/**
+	 * Remove recorded duration params that shouldn't persist
+	 */
+	private removeRecordedDurations(exercise: Exercise): ExerciseParam[] {
+		return exercise.params.filter(param => {
+			if (param.key.toLowerCase() === 'duration' && !param.editable && !exercise.targetDuration) {
+				return false;
+			}
+			return true;
+		});
+	}
+
+	/**
+	 * Add one new set per exercise and reset reps/weight on all existing sets
+	 */
+	private addNewSetsAndReset(workout: ParsedWorkout, setAdditionMap: Map<string, number>): ParsedWorkout {
+		// Add new sets (process in reverse order to avoid index shifting issues)
+		const sortedEntries = Array.from(setAdditionMap.entries())
+			.sort((a, b) => b[1] - a[1]);
+		
+		for (const [exerciseName, lastIndex] of sortedEntries) {
+			const exercise = workout.exercises[lastIndex];
+			if (!exercise) continue;
+
+			const newExercise: Exercise = {
+				...structuredClone(exercise),
+				state: 'pending',
+				recordedDuration: undefined,
+				lineIndex: exercise.lineIndex + 1
+			};
+
+			workout.exercises.splice(lastIndex + 1, 0, newExercise);
+
+			// Update line indices for subsequent exercises
+			for (let i = lastIndex + 2; i < workout.exercises.length; i++) {
+				const ex = workout.exercises[i];
+				if (ex) ex.lineIndex++;
+			}
+		}
+
+		// Reset reps and weight on ALL sets of exercises that triggered set addition
+		const exerciseNames = new Set(setAdditionMap.keys());
+		workout.exercises = workout.exercises.map(exercise => {
+			if (exerciseNames.has(exercise.name)) {
+				return {
+					...exercise,
+					params: exercise.params.map(param => this.resetParamForNewSet(param))
+				};
+			}
+			return exercise;
+		});
+
+		return workout;
+	}
+
+	/**
+	 * Reset a parameter value when a new set is added
+	 */
+	private resetParamForNewSet(param: ExerciseParam): ExerciseParam {
+		const key = param.key.toLowerCase();
+		
+		// Reset reps to initial
+		if (key === 'reps' && param.initialValue !== undefined && param.maxValue !== undefined) {
+			return { ...param, value: param.initialValue };
+		}
+		
+		// Reset weight: wrap to initial if defined, otherwise cap at max
+		if (key === 'weight') {
+			if (param.initialValue !== undefined && param.initialValue !== '') {
+				return { ...param, value: param.initialValue };
+			}
+			if (param.maxValue !== undefined) {
+				const currentVal = parseFloat(param.value);
+				const maxVal = parseFloat(param.maxValue);
+				if (!isNaN(currentVal) && !isNaN(maxVal) && currentVal > maxVal) {
+					return { ...param, value: maxVal.toString() };
+				}
+			}
+		}
+		
+		return param;
 	}
 
 	private formatStartDate(date: Date): string {
@@ -478,5 +617,24 @@ export default class WorkoutLogPlugin extends Plugin {
 		const hours = String(date.getHours()).padStart(2, '0');
 		const minutes = String(date.getMinutes()).padStart(2, '0');
 		return `${year}-${month}-${day} ${hours}:${minutes}`;
+	}
+
+	/**
+	 * Generate a stable hash for a workout based on its title and exercise structure
+	 * This ensures the workout ID doesn't change when metadata is added
+	 */
+	private getWorkoutHash(parsed: ParsedWorkout): string {
+		// Use title + exercise names as a stable identifier
+		const identifier = parsed.metadata.title + ':' + 
+			parsed.exercises.map(e => e.name).join(',');
+		
+		// Simple hash function
+		let hash = 0;
+		for (let i = 0; i < identifier.length; i++) {
+			const char = identifier.charCodeAt(i);
+			hash = ((hash << 5) - hash) + char;
+			hash = hash & hash; // Convert to 32bit integer
+		}
+		return Math.abs(hash).toString(36);
 	}
 }

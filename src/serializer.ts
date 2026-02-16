@@ -66,16 +66,6 @@ export function lockAllFields(parsed: ParsedWorkout): ParsedWorkout {
 	return newParsed;
 }
 
-// Add or update rest duration for an exercise
-export function setRestAfter(parsed: ParsedWorkout, exerciseIndex: number, restDuration: number | undefined): ParsedWorkout {
-	const newParsed = structuredClone(parsed);
-	const exercise = newParsed.exercises[exerciseIndex];
-	if (!exercise) return parsed;
-
-	exercise.restAfter = restDuration;
-	return newParsed;
-}
-
 // Add a new set (duplicate an exercise)
 export function addSet(parsed: ParsedWorkout, exerciseIndex: number): ParsedWorkout {
 	const newParsed = structuredClone(parsed);
