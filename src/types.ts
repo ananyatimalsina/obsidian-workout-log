@@ -109,3 +109,11 @@ export interface UpdateContext {
 	sourcePath: string;
 	sectionInfo: SectionInfo | null;
 }
+
+// Plugin settings
+export type LogGrouping = 'daily' | 'weekly';
+
+export interface WorkoutLogSettings {
+	logFolder: string;           // Folder path where workout logs are stored
+	logGrouping: LogGrouping;    // How to group logs (daily or weekly)
+}

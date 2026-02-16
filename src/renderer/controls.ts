@@ -1,5 +1,4 @@
 import { WorkoutState, WorkoutCallbacks, ParsedWorkout } from '../types';
-import { serializeWorkoutAsTemplate } from '../serializer';
 
 export function renderWorkoutControls(
 	container: HTMLElement,
@@ -37,26 +36,7 @@ export function renderWorkoutControls(
 		// Completed label
 		const completedLabel = controlsEl.createSpan({ cls: 'workout-completed-label' });
 		completedLabel.createSpan({ cls: 'workout-btn-icon', text: '✓' });
-		completedLabel.createSpan({ text: 'Completed' });
-
-		// Copy as template button
-		const copyBtn = controlsEl.createEl('button', { cls: 'workout-btn' });
-		copyBtn.createSpan({ cls: 'workout-btn-icon', text: '📋' });
-		copyBtn.createSpan({ text: 'Copy as Template' });
-		copyBtn.addEventListener('click', async () => {
-			const template = serializeWorkoutAsTemplate(parsed);
-			await navigator.clipboard.writeText('```workout\n' + template + '\n```');
-
-			// Visual feedback
-			const textSpan = copyBtn.querySelector('span:last-child');
-			if (textSpan) {
-				const originalText = textSpan.textContent;
-				textSpan.textContent = 'Copied!';
-				setTimeout(() => {
-					textSpan.textContent = originalText;
-				}, 1500);
-			}
-		});
+		completedLabel.createSpan({ text: 'Workout logged and reset' });
 	}
 
 	return controlsEl;
