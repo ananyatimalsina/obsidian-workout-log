@@ -4,20 +4,48 @@ import { serializeWorkout, updateParamValue, updateExerciseState, addSet, setRec
 import { renderWorkout } from './renderer';
 import { TimerManager } from './timer/manager';
 import { FileUpdater } from './file/updater';
-import { ParsedWorkout, WorkoutCallbacks, SectionInfo, Exercise } from './types';
+import { ParsedWorkout, WorkoutCallbacks, SectionInfo, Exercise, WorkoutLogSettings } from './types';
 import { formatDurationHuman } from './parser/exercise';
+import { DEFAULT_SETTINGS, WorkoutLogSettingTab } from './settings';
+import { WorkoutLogger } from './logger';
 
 export default class WorkoutLogPlugin extends Plugin {
 	private timerManager: TimerManager = new TimerManager();
 	private fileUpdater: FileUpdater | null = null;
+	logger: WorkoutLogger | null = null;
+	settings: WorkoutLogSettings = DEFAULT_SETTINGS;
 
 	async onload(): Promise<void> {
+		// Load settings
+		await this.loadSettings();
+
+		// Initialize services
 		this.fileUpdater = new FileUpdater(this.app);
+		this.logger = new WorkoutLogger(this.app, this.settings);
+
+		// Register settings tab
+		this.addSettingTab(new WorkoutLogSettingTab(this.app, this));
 
 		// Register the workout code block processor
 		this.registerMarkdownCodeBlockProcessor('workout', (source, el, ctx) => {
 			this.processWorkoutBlock(source, el, ctx);
 		});
+	}
+
+	async loadSettings(): Promise<void> {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		// Update logger settings if logger exists
+		if (this.logger) {
+			this.logger.updateSettings(this.settings);
+		}
+	}
+
+	async saveSettings(): Promise<void> {
+		await this.saveData(this.settings);
+		// Update logger settings
+		if (this.logger) {
+			this.logger.updateSettings(this.settings);
+		}
 	}
 
 	onunload(): void {
@@ -125,6 +153,14 @@ export default class WorkoutLogPlugin extends Plugin {
 				// Lock all fields
 				currentParsed = lockAllFields(currentParsed);
 
+				// Log the completed workout
+				if (this.logger) {
+					await this.logger.logWorkout(currentParsed);
+				}
+
+				// Reset workout to planned state
+				currentParsed = this.resetWorkout(currentParsed);
+
 				await updateFile(currentParsed);
 
 				// Stop timer
@@ -183,6 +219,15 @@ export default class WorkoutLogPlugin extends Plugin {
 						currentParsed.metadata.duration = formatDurationHuman(finalState.workoutElapsed);
 					}
 					currentParsed = lockAllFields(currentParsed);
+					
+					// Log the completed workout
+					if (this.logger) {
+						await this.logger.logWorkout(currentParsed);
+					}
+					
+					// Reset workout to planned state
+					currentParsed = this.resetWorkout(currentParsed);
+					
 					await updateFile(currentParsed);
 					this.timerManager.stopWorkoutTimer(workoutId);
 				}
@@ -258,6 +303,14 @@ export default class WorkoutLogPlugin extends Plugin {
 					}
 					currentParsed = lockAllFields(currentParsed);
 
+					// Log the completed workout
+					if (this.logger) {
+						await this.logger.logWorkout(currentParsed);
+					}
+					
+					// Reset workout to planned state
+					currentParsed = this.resetWorkout(currentParsed);
+
 					// Stop timer BEFORE file update
 					this.timerManager.stopWorkoutTimer(workoutId);
 
@@ -317,6 +370,15 @@ export default class WorkoutLogPlugin extends Plugin {
 						currentParsed.metadata.duration = formatDurationHuman(finalState.workoutElapsed);
 					}
 					currentParsed = lockAllFields(currentParsed);
+					
+					// Log the completed workout
+					if (this.logger) {
+						await this.logger.logWorkout(currentParsed);
+					}
+					
+					// Reset workout to planned state
+					currentParsed = this.resetWorkout(currentParsed);
+					
 					await updateFile(currentParsed);
 					this.timerManager.stopWorkoutTimer(workoutId);
 				}
@@ -352,6 +414,15 @@ export default class WorkoutLogPlugin extends Plugin {
 						currentParsed.metadata.duration = formatDurationHuman(finalState.workoutElapsed);
 					}
 					currentParsed = lockAllFields(currentParsed);
+					
+					// Log the completed workout
+					if (this.logger) {
+						await this.logger.logWorkout(currentParsed);
+					}
+					
+					// Reset workout to planned state
+					currentParsed = this.resetWorkout(currentParsed);
+					
 					await updateFile(currentParsed);
 					this.timerManager.stopWorkoutTimer(workoutId);
 				}
@@ -368,6 +439,26 @@ export default class WorkoutLogPlugin extends Plugin {
 				);
 			}
 		};
+	}
+
+	private resetWorkout(workout: ParsedWorkout): ParsedWorkout {
+		// Reset metadata
+		workout.metadata.state = 'planned';
+		workout.metadata.startDate = undefined;
+		workout.metadata.duration = undefined;
+
+		// Reset all exercises to pending state and unlock fields
+		workout.exercises = workout.exercises.map(exercise => ({
+			...exercise,
+			state: 'pending',
+			recordedDuration: undefined,
+			params: exercise.params.map(param => ({
+				...param,
+				locked: false
+			}))
+		}));
+
+		return workout;
 	}
 
 	private formatStartDate(date: Date): string {
