@@ -13,6 +13,9 @@ export interface ExerciseParam {
 	value: string;
 	editable: boolean;  // true if wrapped in [brackets]
 	unit?: string;
+	progressionFormula?: string;  // Optional formula like "w+2" or "((w/r)^2)"
+	initialValue?: string;  // Initial value to reset to when max is reached
+	maxValue?: string;  // Maximum value before resetting to initial
 }
 
 // Parsed metadata from the workout block header
@@ -85,6 +88,7 @@ export interface WorkoutCallbacks {
 	onPauseExercise: () => void;
 	onResumeExercise: () => void;
 	onAddSample: () => Promise<void>;
+	getSectionInfo: () => SectionInfo | null;  // Function to get fresh sectionInfo
 }
 
 // Context passed to renderer
