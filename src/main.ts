@@ -452,10 +452,20 @@ export default class WorkoutLogPlugin extends Plugin {
 			...exercise,
 			state: 'pending',
 			recordedDuration: undefined,
-			params: exercise.params.map(param => ({
-				...param,
-				locked: false
-			}))
+			params: exercise.params
+				.filter(param => {
+					// Remove recorded duration params (non-editable, non-target durations)
+					if (param.key.toLowerCase() === 'duration' && !param.editable && !exercise.targetDuration) {
+						return false;
+					}
+					return true;
+				})
+				.map(param => ({
+					...param,
+					// Make editable if it was editable before, or if it's a target duration
+					locked: false,
+					editable: param.editable || (param.key.toLowerCase() === 'duration' && exercise.targetDuration !== undefined)
+				}))
 		}));
 
 		return workout;
