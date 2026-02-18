@@ -75,7 +75,15 @@ export class WorkoutLogger {
 		} else {
 			// Create new file with header
 			const header = `# ${this.getLogSectionTitle()}\n\n`;
-			await this.app.vault.create(filePath, header + workoutMarkdown);
+			
+			// For weekly logs, add initial date separator
+			let initialContent = header;
+			if (logGrouping === 'weekly') {
+				const dayTitle = moment().format('dddd, MMMM D');
+				initialContent += `### ${dayTitle}\n\n`;
+			}
+			
+			await this.app.vault.create(filePath, initialContent + workoutMarkdown);
 		}
 	}
 
@@ -96,7 +104,7 @@ export class WorkoutLogger {
 		const timestamp = moment().format('HH:mm');
 		const serialized = serializeWorkout(workout);
 		
-		return `## ${workout.metadata.title || 'Workout'} - ${timestamp}\n\n\`\`\`workout\n${serialized}\n\`\`\`\n\n`;
+		return `## ${workout.metadata.title || 'Workout'} - ${timestamp}\n\n\`\`\`workout\n${serialized}\n\`\`\`\n\n\n`;
 	}
 
 	/**
