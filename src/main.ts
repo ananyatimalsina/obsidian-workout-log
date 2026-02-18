@@ -492,13 +492,26 @@ export default class WorkoutLogPlugin extends Plugin {
 		workout.metadata.startDate = undefined;
 		workout.metadata.duration = undefined;
 
+		// Track which exercise names have any skipped sets
+		const skippedExercises = new Set<string>();
+		for (const exercise of workout.exercises) {
+			if (exercise.state === 'skipped') {
+				skippedExercises.add(exercise.name);
+			}
+		}
+
 		// Track which exercise names need new sets added (stores last occurrence index)
 		const setAdditionNeeded = new Map<string, number>();
 
 		// Apply progression to all exercises and track which need new sets
 		workout.exercises = workout.exercises.map((exercise, index) => {
 			const filteredParams = this.removeRecordedDurations(exercise);
-			const progressionResult = applyProgression(filteredParams);
+			
+			// Skip progression if any set of this exercise was skipped
+			const shouldApplyProgression = !skippedExercises.has(exercise.name);
+			const progressionResult = shouldApplyProgression 
+				? applyProgression(filteredParams)
+				: { params: filteredParams, shouldAddSet: false };
 			
 			const resetExercise = {
 				...exercise,
